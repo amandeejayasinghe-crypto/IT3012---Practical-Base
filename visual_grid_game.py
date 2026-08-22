@@ -1,7 +1,7 @@
 # visual_grid_game.py
 import random
 import tkinter as tk
-
+from agent import SearchAgent
 
 class VisualGridHuntGame:
     """A flexible Pacman-style grid environment with support for configurable opponents and larger scales."""
@@ -35,7 +35,7 @@ class VisualGridHuntGame:
             if tuple(op_pos) != (0, 0) and tuple(op_pos) not in self.walls and tuple(op_pos) not in self.food_positions:
                 self.opponents.append(op_pos)
 
-         # Generate toxic traps avoiding start position, walls, and food
+        # Generate toxic traps avoiding start position, walls, and food
         self.toxic_traps = set()
 
         while len(self.toxic_traps) < 5:   # create 5 traps
@@ -43,10 +43,10 @@ class VisualGridHuntGame:
             ty = random.randint(0, self.height - 1)
             trap_pos = (tx, ty)
 
-        if (trap_pos != (0, 0)
-            and trap_pos not in self.walls
-            and trap_pos not in self.food_positions):
-            self.toxic_traps.add(trap_pos)
+            if (trap_pos != (0, 0)
+                    and trap_pos not in self.walls
+                    and trap_pos not in self.food_positions):
+                self.toxic_traps.add(trap_pos)
 
         self.score = 0
         self.steps = 0
@@ -63,8 +63,10 @@ class VisualGridHuntGame:
             'hit_wall': tuple(self.agent_pos) in self.walls,
             'collision': self.collision,
             'score': self.score,
-            'remaining_food': len(self.food_positions)
-            
+            'remaining_food': len(self.food_positions),
+            'grid_size': (self.width, self.height),
+            'walls': list(self.walls),
+            'all_food': list(self.food_positions)
         }
 
     def execute_action(self, action: str):
@@ -92,8 +94,8 @@ class VisualGridHuntGame:
             self.food_positions.remove(tuple_pos)
             self.score += 20
 
-        if tuple_pos in self.toxic_traps:31            
-           self.score -= 15    
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
 
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
@@ -124,15 +126,23 @@ class GridGameGUI:
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
 
-        # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
-        max_canvas_dim = 600
+        self.agent = SearchAgent()
+
+        # Change algorithm here
+        self.agent.active_algo = "BFS"
+
+        # self.agent.active_algo = "DFS"
+        # self.agent.active_algo = "UCS"
+
+        # Reserve space for the title bar and controls so the whole grid fits on screen.
+        root.update_idletasks()
+        available_width = root.winfo_screenwidth() - 40
+        available_height = root.winfo_screenheight() - 150
+        max_canvas_dim = min(600, available_width, available_height)
         self.cell_size = max(20, min(max_canvas_dim // self.env.width, max_canvas_dim // self.env.height))
 
         canvas_w = self.env.width * self.cell_size
         canvas_h = self.env.height * self.cell_size
-
-        self.canvas = tk.Canvas(root, width=canvas_w, height=canvas_h, bg="white")
-        self.canvas.pack()
 
         self.label = tk.Label(root, text="Score: 0 | Steps: 0", font=("Arial", 14))
         self.label.pack(pady=10)
@@ -140,6 +150,9 @@ class GridGameGUI:
         self.btn = tk.Button(root, text="Start Simulation", command=self.run_loop, font=("Arial", 12), bg="#000066",
                              fg="white")
         self.btn.pack(pady=5)
+
+        self.canvas = tk.Canvas(root, width=canvas_w, height=canvas_h, bg="white")
+        self.canvas.pack()
 
         self.draw_grid()
 
@@ -212,7 +225,8 @@ class GridGameGUI:
 
         def step():
             if not self.env.is_done():
-                action = random.choice(['Up', 'Down', 'Left', 'Right'])
+                percept = self.env.get_percept()
+                action = self.agent.sense_and_act(percept)
                 self.env.execute_action(action)
 
                 self.draw_grid()
