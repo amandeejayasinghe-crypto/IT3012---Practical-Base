@@ -1,6 +1,8 @@
 # visual_grid_game.py
+from agent import SearchAgent
 import random
 import tkinter as tk
+
 
 
 class VisualGridHuntGame:
@@ -43,10 +45,10 @@ class VisualGridHuntGame:
             ty = random.randint(0, self.height - 1)
             trap_pos = (tx, ty)
 
-        if (trap_pos != (0, 0)
-            and trap_pos not in self.walls
-            and trap_pos not in self.food_positions):
-            self.toxic_traps.add(trap_pos)
+            if (trap_pos != (0, 0)
+                and trap_pos not in self.walls
+                and trap_pos not in self.food_positions):
+                self.toxic_traps.add(trap_pos)
 
         self.score = 0
         self.steps = 0
@@ -63,7 +65,11 @@ class VisualGridHuntGame:
             'hit_wall': tuple(self.agent_pos) in self.walls,
             'collision': self.collision,
             'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'remaining_food': len(self.food_positions),
+            'grid_size': (self.width, self.height),
+            'walls': list(self.walls),
+            'toxic_traps': list(self.toxic_traps),
+            'all_food': list(self.food_positions)
             
         }
 
@@ -88,27 +94,17 @@ class VisualGridHuntGame:
         tuple_pos = tuple(self.agent_pos)
 
         #Food rewards 
+        tuple_pos = tuple(self.agent_pos)
+
+        # Food rewards
         if tuple_pos in self.food_positions:
-            self.food_positions.remove(tuple_pos)
-            self.score += 20
+             self.food_positions.remove(tuple_pos)
+             self.score += 20
 
-        if tuple_pos in self.toxic_traps:31            
-           self.score -= 15    
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
 
-        for op in self.opponents:
-            move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
-            if move == 'Up' and op[1] < self.height - 1:
-                op[1] += 1
-            elif move == 'Down' and op[1] > 0:
-                op[1] -= 1
-            elif move == 'Left' and op[0] > 0:
-                op[0] -= 1
-            elif move == 'Right' and op[0] < self.width - 1:
-                op[0] += 1
-
-            if op == self.agent_pos:
-                self.score -= 50
-                self.collision = True
+        self.collision = tuple_pos in {tuple(opponent) for opponent in self.opponents}
 
     def is_done(self) -> bool:
         return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
@@ -123,6 +119,8 @@ class GridGameGUI:
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
+        self.agent = SearchAgent()
+
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -131,15 +129,18 @@ class GridGameGUI:
         canvas_w = self.env.width * self.cell_size
         canvas_h = self.env.height * self.cell_size
 
+        controls = tk.Frame(root)
+        controls.pack(fill="x", padx=10, pady=8)
+
+        self.label = tk.Label(controls, text="Score: 0 | Steps: 0", font=("Arial", 14))
+        self.label.pack(side="left")
+
+        self.btn = tk.Button(controls, text="Start Simulation", command=self.run_loop, font=("Arial", 12),
+                     bg="#000066", fg="white")
+        self.btn.pack(side="right")
+
         self.canvas = tk.Canvas(root, width=canvas_w, height=canvas_h, bg="white")
         self.canvas.pack()
-
-        self.label = tk.Label(root, text="Score: 0 | Steps: 0", font=("Arial", 14))
-        self.label.pack(pady=10)
-
-        self.btn = tk.Button(root, text="Start Simulation", command=self.run_loop, font=("Arial", 12), bg="#000066",
-                             fg="white")
-        self.btn.pack(pady=5)
 
         self.draw_grid()
 
@@ -212,14 +213,27 @@ class GridGameGUI:
 
         def step():
             if not self.env.is_done():
-                action = random.choice(['Up', 'Down', 'Left', 'Right'])
+
+                percept = self.env.get_percept()
+                action = self.agent.sense_and_act(percept)
+
                 self.env.execute_action(action)
 
                 self.draw_grid()
-                self.label.config(text=f"Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}")
+
+                self.label.config(
+                    text=f"Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}"
+                )
+
                 self.root.after(250, step)
+
             else:
-                end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
+                end_text = (
+                    f"Collision! Game Over! Final Score: {self.env.score}"
+                    if self.env.collision
+                    else f"Finished! Final Score: {self.env.score}"
+                )
+
                 self.label.config(text=end_text)
                 self.btn.config(state="normal")
 
