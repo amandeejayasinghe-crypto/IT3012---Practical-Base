@@ -1,7 +1,9 @@
+from logic_engine import KnowledgeBase
 from collections import deque
 import heapq
 import math
 import random
+
 
 # agent.py
 class GreedyGridAgent:
@@ -9,6 +11,18 @@ class GreedyGridAgent:
 
     def __init__(self):
         self.actions_pool = ['Up', 'Down', 'Left', 'Right']
+
+        self.kb = KnowledgeBase()
+
+        self.kb.tell_rule(
+         ['TargetVisible', 'HasDust'],
+          'SafeToEngage'
+        )
+
+        self.kb.tell_rule(
+         ['SafeToEngage', 'BloodseekerMissing'],
+         'Retreat'
+        )
 
     def sense_and_act(self, percept: dict) -> str:
         # If standing directly on food, or just wander / move towards coordinates
@@ -22,6 +36,18 @@ class SearchAgent:
     def __init__(self):
         self.plan = []
         self.active_algo = "AStar"
+
+        self.kb = KnowledgeBase()
+
+        self.kb.tell_rule(
+            ['TargetVisible', 'HasDust'],
+            'SafeToEngage'
+        )
+
+        self.kb.tell_rule(
+            ['SafeToEngage', 'BloodseekerMissing'],
+             'Retreat'
+        )
 
     def manhattan_distance(self, pos, goal):
         return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
@@ -141,6 +167,18 @@ class SearchAgent:
                     next_pos not in walls and
                     next_pos not in reached_states
                 ):
+
+                    # Clear previous facts
+                    self.kb.clear_facts()
+
+                    # Example percepts
+                    # Add real percepts later if the game provides them
+
+                    self.kb.forward_chain()
+
+                    # Skip infeasible nodes
+                    if 'Retreat' in self.kb.facts:
+                        continue
 
                     new_g = g_cost + 1
 
